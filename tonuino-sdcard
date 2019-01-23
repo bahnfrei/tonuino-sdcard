@@ -16,12 +16,13 @@ hash id3v2 &>/dev/null || { echo "ERROR: command \"id3v2\" is not not found, ple
 
 # print out help/usage
 function usage {
-  echo "Usage: $(basename "$0") [-h] || [-v] -l <path to sdcard> || [-v] [-n] [-r] -c <music folder> <path to sdcard> || -R <path to sdcard>" >&2
+  echo "Usage: $(basename "$0") [-h] || [-v] -l <path to sdcard> || [-v] [-n] [-a] [-r] -c <music folder> <path to sdcard> || -R <path to sdcard>" >&2
   echo -e "\t-h|--help      show help/usage" >&2
   echo -e "\t-v|--verbose   show detailed information about executed commands" >&2
   echo -e "\t-l|--list      list content of sdcard based on ID3v2 tags (if available)" >&2
   echo -e "\t-c|--copy      copy content of music folder to sdcard, reflecting folder structure and naming convention" >&2
   echo -e "\t-n|--num       enumerate files mannually (e.g. in case of missing ID3v2 tags or mixed files)" >&2
+  echo -e "\t-a|--add       add files to an existing folder (implies parameter -n, enumerate files mannually)" >&2
   echo -e "\t-r|--replace   replace already existing destination folder" >&2
   echo -e "\t-R|--reorder   reorder sdcard folders to eliminate gaps" >&2
   exit 1
@@ -33,10 +34,20 @@ function copy {
   [ ! -d "$SRC" ] || [ -z "$(find "$SRC" -type f -iname \*.mp3 2>/dev/null)" ] && { echo "ERROR: please specify a valid path to your MP3 files!" >&2; exit 1; }
   [ ! -d "$DST" ] && { echo "ERROR: please specify a valid path to your sdcard!" >&2; exit 1; }
 
-  # clear existing directory, which has to be replaced OR create a new/empty directory
+  # variable used for manual enumeration of files or files without ID3 tags
+  CNT=1
+
+  # clear existing directory, if it has to be replaced OR create a new/empty directory
+  # determine next file number when adding files to an existing directory
   if [[ -n "$REPL" ]]; then
     # try to clear existing directory, set destination path and directory accordingly
     rm "$DST"/*.mp3  >/dev/null 2>&1 || { echo "ERROR: can't clean existing directory $DST" >&2; exit 1; }
+    DN="$(basename "$DST")"
+    DST="$(dirname "$DST")"
+  elif [[ -n "$ADD" ]]; then
+    # determine next file number for adding files to the already existing directory
+    # set destination path and directory accordingly
+    CNT="$(printf "%002d" "$(( $(find "$DST" -type f -iname \*.mp3 2>/dev/null | wc -l)+1 ))")"
     DN="$(basename "$DST")"
     DST="$(dirname "$DST")"
   else
@@ -44,9 +55,6 @@ function copy {
     DN="$(printf "%02d" "$(( $(find "$DST" -type d -name "[0-9][0-9]" 2>/dev/null | wc -l)+1 ))")"
     mkdir "$DST"/"$DN" >/dev/null 2>&1 || { echo "ERROR: can't create directory $DST/$DN" >&2; exit 1; }
   fi
-
-  # variable used for manual enumeration of files or files without ID3 tags
-  CNT=1
 
   # loop over all MP3 files, convert filenames based on ID3 tag track number (if exists) or dedicated counter and copy to sdcard
   find "$SRC" -type f -iname \*.mp3 -print0 | while read -d $'\0' -r FILE ; do
@@ -127,7 +135,7 @@ function reorder {
   # collect existing directories and sort the result nummerically
   while IFS=$'\n' read -r LINE; do
     DIRS+=( "$(basename "$LINE")" )
-  done < <(find "$SRC" -type d -name "[0-9][0-9]" 2>/dev/null | LC_ALL=C sort -n)
+  done < <(find "$SRC" -type d -name "[0-9][0-9]" 2>/dev/null | sort -n)
 
   # exit function in case there's no gap (directories are available and number of dirs equals last dirs name)
   [[ "${#DIRS[*]}" -gt 0 ]] && [[ "${#DIRS[*]}" -eq "${DIRS[$((${#DIRS[*]}-1))]}" ]] && { echo "INFO: nothing to do"; exit 0; }
@@ -152,6 +160,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     -v|--verbose) VERB=1;;
     -r|--replace) REPL=1;;
+    -a|--add) ADD=1;;
     -n|--num) ENUM=1;;
     -R|--reorder) CMD="reorder"; SRC="$2"; shift;;
     -l|--list) CMD="list"; SRC="$2"; shift;;
