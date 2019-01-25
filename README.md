@@ -157,3 +157,7 @@ adding files to an existing directory on the sdcard
     019.mp3
     020.mp3
     021.mp3
+
+### Roadmap:
+
+* honor cd collections
