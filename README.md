@@ -13,7 +13,7 @@ shell script to manage TonUINO sdcard content, based on ID3v2 tags (if available
         -l|--list      list content of sdcard based on ID3v2 tags (if available)
         -c|--copy      copy content of music folder to sdcard, reflecting folder structure and naming convention
         -n|--num       enumerate files mannually (e.g. in case of missing ID3v2 tags or mixed files)
-        -a|--add       add files to an existing folder (implies parameter -n, enumerate files mannually)
+        -a|--add       add files to an existing folder
         -r|--replace   replace already existing destination folder
         -R|--reorder   reorder sdcard folders to eliminate gaps
 
@@ -160,4 +160,4 @@ adding files to an existing directory on the sdcard
 
 ### Roadmap:
 
-* honor cd collections
+* honor cd collections (currently managed by appending additional cd folders to an already existing sdcard folder)
