@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 ##############################################################################
 #
 # DESC: manage TonUINO sdcard content, based on ID3v2 tags (if available)
@@ -39,15 +40,15 @@ function copy {
 
   # clear existing directory, if it has to be replaced OR create a new/empty directory
   # determine next file number when adding files to an existing directory
-  if [[ -n "$REPL" ]]; then
+  if [ -n "$REPL" ]; then
     # try to clear existing directory, set destination path and directory accordingly
     rm "$DST"/*.mp3  >/dev/null 2>&1 || { echo "ERROR: can't clean existing directory $DST" >&2; exit 1; }
     DN="$(basename "$DST")"
     DST="$(dirname "$DST")"
-  elif [[ -n "$ADD" ]]; then
+  elif [ -n "$ADD" ]; then
     # determine next file number for adding files to the already existing directory
     # set destination path and directory accordingly
-    CNT="$(printf "%002d" "$(( $(find "$DST" -type f -iname \*.mp3 2>/dev/null | wc -l)+1 ))")"
+    CNT="$(( $(find "$DST" -type f -iname \*.mp3 2>/dev/null | wc -l)+1 ))"
     DN="$(basename "$DST")"
     DST="$(dirname "$DST")"
   else
@@ -57,35 +58,36 @@ function copy {
   fi
 
   # loop over all MP3 files, convert filenames based on ID3 tag track number (if exists) or dedicated counter and copy to sdcard
-  find "$SRC" -type f -iname \*.mp3 -print0 | while read -d $'\0' -r FILE ; do
+  while IFS= read -d $'\0' -r FILE ; do
     # try to get a valid track number and eliminate left hand zeros
     # https://stackoverflow.com/questions/8078167/bizarre-issue-with-printf-in-bash-script09-and-08-are-invalid-numbers-07/11804275
     FN="$(printf "%03d" "$(( 10#$(id3v2 -l "$FILE" | LC_ALL=C sed -ne '/TRCK/s/.*:[^0-9]*\([0-9]*\).*/\1/p') ))").mp3"
     # use dedicated counter for filenames if the above command didn't succeed or manual enumeration has been forced (-n)
-    [[ $FN == "000.mp3" ]] || [[ -n $ENUM ]] && FN="$(printf "%03d" $CNT).mp3"
+    [ "$FN" = 000.mp3 ] || [ -n "$ENUM" ] && FN="$(printf "%03d" "$CNT").mp3"
     # be verbose
-    [[ -n $VERB ]] && echo -n "cp $FILE $DST/$DN/$FN ... "
+    [ -n "$VERB" ] && echo -n "cp $FILE $DST/$DN/$FN ... "
     # try to copy file
-    cp "$FILE" "$DST"/"$DN"/"$FN" >/dev/null 2>&1 || { echo "ERROR: can't copy file $FILE to $DST/$DN/$FN" >&2; exit 1; }
+    cp -- "$FILE" "$DST"/"$DN"/"$FN" >/dev/null 2>&1 || { echo "ERROR: can't copy file $FILE to $DST/$DN/$FN" >&2; exit 1; }
     # be verbose
-    [[ -n $VERB ]] && echo "DONE"
+    [ -n "$VERB" ] && echo "DONE"
     # increase counter
     ((CNT++))
-  done
+  done < <(find "$SRC" -type f -iname \*.mp3 -print0 2>/dev/null)
 
   exit 0
 }
 
 # list content of sdcard based on ID3v2 tags, if available
 function list {
-  # validate source (sdcard mount point, containing MP3 files)
-  [ ! -d "$SRC" ] || [ -z "$(find "$SRC" -type f -iname \*.mp3 2>/dev/null)" ] && { echo "ERROR: please specify a valid path to your sdcard!" >&2; exit 1; }
+  # validate source (sdcard mount point, directory structure, mp3 files)
+  [ ! -d "$SRC" ] && { echo "ERROR: please specify a valid path to your sdcard!" >&2; exit 1; }
+  [ -z "$(find "$SRC" -type f -iname \*.mp3 2>/dev/null)" ] || [ -z "$(find "$SRC" -type d -name "[0-9][0-9]" 2>/dev/null)" ] && { echo "INFO: $SRC seems to be empty..." >&2; exit 1; }
 
   # loop over all sdcard folders
   for DIR in $(find "$SRC" -type d -name "[0-9][0-9]" | sort -n); do
     # in verbose mode print detailed information for each file (artists, album, title if ID3 tags are available)
     # or a summary for each folder (artist, album if ID3 tags are available) otherwise
-		if [[ -n $VERB ]]; then
+		if [ -n "$VERB" ]; then
       # print directory name
 			echo "$DIR"
       # loop over MP3 files
@@ -107,16 +109,16 @@ function list {
       # determine ID3 information for all MP3 files in the directory at once and ensure output is ordered accordingly: artist, album
       # ordering: prepend a number per tag, sort nummerically, keep uniqe information only, remove prefixed numbers
       # store the result in an array
-      while IFS=$'\n' read -r LINE; do
+      while IFS= read -d $'\n' -r LINE; do
         ID3+=("$LINE")
       done < <(id3v2 -l "$DIR"/*.mp3 | LC_ALL=C sed -ne '/TPE1/s/.*: \(.*\)/1Artist: \1/p;/TALB/s/.*: \(.*\)/2Album: \1/p;s/.*\(No ID3.* tag\)/3\1/p' | \
         LC_ALL=C sort -n | LC_ALL=C uniq | LC_ALL=C cut -c2-)
       # if array holds exactly 2 elements, it has to be artist and album information
       # if array holds more than 2 elements, the directory contains songs of various artists and/or albums
       # otherwise no ID3 tags were found
-      if [[ ${#ID3[*]} -eq "2" ]]; then
+      if [ "${#ID3[*]}" -eq 2 ]; then
 				echo "$DIR: ${ID3[0]}, ${ID3[1]}"
-			elif [[ ${#ID3[*]} -gt "2" ]]; then
+			elif [ "${#ID3[*]}" -gt 2 ]; then
 				echo "$DIR: various artists/albums"
 			else
 				echo "$DIR: no ID3 tags available"
@@ -129,23 +131,24 @@ function list {
 
 # reorder sdcard folders to eliminate gaps (may not be very useful, because RFID cards/tags have to be reconfigured accordingly)
 function reorder {
-  # validate source (sdcard mount point, containing MP3 files)
-  [ ! -d "$SRC" ] || [ -z "$(find "$SRC" -type f -iname \*.mp3 2>/dev/null)" ] || [ -z "$(find "$SRC" -type d -name "[0-9][0-9]" 2>/dev/null)" ] && { echo "ERROR: please specify a valid path to your sdcard!" >&2; exit 1; }
+  # validate source (sdcard mount point, directory structure, mp3 files)
+  [ ! -d "$SRC" ] && { echo "ERROR: please specify a valid path to your sdcard!" >&2; exit 1; }
+  [ -z "$(find "$SRC" -type f -iname \*.mp3 2>/dev/null)" ] || [ -z "$(find "$SRC" -type d -name "[0-9][0-9]" 2>/dev/null)" ] && { echo "INFO: $SRC seems to be empty, so there's nothing to reorder..." >&2; exit 1; }
 
   # collect existing directories and sort the result nummerically
-  while IFS=$'\n' read -r LINE; do
+  while IFS= read -d $'\n' -r LINE; do
     DIRS+=( "$(basename "$LINE")" )
   done < <(find "$SRC" -type d -name "[0-9][0-9]" 2>/dev/null | sort -n)
 
   # exit function in case there's no gap (directories are available and number of dirs equals last dirs name)
-  [[ "${#DIRS[*]}" -gt 0 ]] && [[ "${#DIRS[*]}" -eq "${DIRS[$((${#DIRS[*]}-1))]}" ]] && { echo "INFO: nothing to do"; exit 0; }
+  [ "${#DIRS[*]}" -gt 0 ] && [ "${#DIRS[*]}" -eq "${DIRS[$((${#DIRS[*]}-1))]}" ] && { echo "INFO: nothing to do"; exit 0; }
 
   # enumeration counter
   CNT=1
   # loop over existing directories
   for DIR in "${DIRS[@]}"; do
-    # move incase of enumeration gap (counter and directory name are not equal)
-    if [[ ! "DIR" -eq "$(printf "%02d" "$CNT")" ]]; then
+    # move in case of enumeration gap (counter and directory name are not equal)
+    if [ ! "$DIR" = "$(printf "%02d" "$CNT")" ]; then
        mv "$SRC/$DIR" "$SRC/$(printf "%02d" "$CNT")" >/dev/null 2>&1 || { echo "ERROR: can't move directory $SRC/$DIR $SRC/$(printf "%02d" "$CNT")" >&2; exit 1; }
     fi
     # increase counter
@@ -160,7 +163,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     -v|--verbose) VERB=1;;
     -r|--replace) REPL=1;;
-    -a|--add) ADD=1;;
+    -a|--add) ADD=1; ENUM=1;;
     -n|--num) ENUM=1;;
     -R|--reorder) CMD="reorder"; SRC="$2"; shift;;
     -l|--list) CMD="list"; SRC="$2"; shift;;
@@ -171,9 +174,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 # MAIN - this is where the real work starts...
-[[ $CMD == "reorder" ]] && reorder
-[[ $CMD == "list" ]] && list
-[[ $CMD == "copy" ]] && copy
+[ "$CMD" = reorder ] && reorder
+[ "$CMD" = list ] && list
+[ "$CMD" = copy ] && copy
 
 # print usage instruction if script has been called without any arguments
 usage
