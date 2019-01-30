@@ -57,7 +57,7 @@ copy() {
   elif [ -n "$ADD" ]; then
     # determine next file number for adding files to the already existing directory
     # set destination path and directory accordingly
-    CNT="$(( $(find "$DST" -type f -iname \*.mp3 2>/dev/null | wc -l)+1 ))"
+    CNT="$(find "$DST" -type f -iname \*.mp3 2>/dev/null | wc -l)"
     DN="$(basename "$DST")"
     DST="$(dirname "$DST")"
   else
@@ -75,7 +75,7 @@ copy() {
     # use dedicated counter for file number if the above command didn't succeed or manual enumeration has been forced (-n);
     # add enumeration overhead to file number in append mode
     if [ "$FN" -eq 0 ] || [ -n "$ENUM" ]; then
-      FN=$CNT
+      if [ -n "$ADD" ]; then FN=$(( $CNT +1 )); else FN=$CNT; fi
       ((CNT++))
     elif [ -n "$ADD" ]; then
       ((FN+=CNT))
