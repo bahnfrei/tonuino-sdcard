@@ -67,7 +67,7 @@ copy() {
   fi
 
   # loop over all MP3 files, convert filenames based on ID3 tag track number (if exists) or dedicated counter and copy to sdcard
-  while IFS= read -d $'\0' -r FILE ; do
+  while IFS= read -d $'\n' -r FILE ; do
     # try to get a valid track number and eliminate left hand zeros
     # https://stackoverflow.com/questions/8078167/bizarre-issue-with-printf-in-bash-script09-and-08-are-invalid-numbers-07/11804275
     FN=$(( 10#$(id3v2 -l "$FILE" | LC_ALL=C sed -ne '/TRCK/s/.*:[^0-9]*\([0-9]*\).*/\1/p') ))
@@ -91,7 +91,7 @@ copy() {
     # be verbose
     [ -n "$VERB" ] && echo "DONE"
     # increase counter
-  done < <(find "$SRC" -type f -iname \*.mp3 -print0 2>/dev/null)
+  done < <(find "$SRC" -type f -iname \*.mp3 2>/dev/null | sort -n)
 
   exit 0
 }
