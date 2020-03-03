@@ -114,7 +114,7 @@ list() {
 				echo -ne "\t$(basename "$FILE") => "
         # determine ID3 information and ensure output is ordered accordingly: artist, album, title
         # ordering: prepend a number per tag, sort nummerically, remove prefixed numbers
-        # print it out finally
+        # finally print detailed information for each MP3 file
         id3v2 -l "$FILE" | LC_ALL=C sed -nE '/^(TPE1|TP1)/s/.*: (.*)/1Artist: \1/p;/^(TALB|TAL)/s/.*: (.*)/2, Album: \1/p;/^(TIT2|TT2)/s/.*: (.*)/3, Title: \1/p;/No (ID3|ID3v2) tag/s/.*: (.*)/3\1/p' | \
           LC_ALL=C sort -n | LC_ALL=C cut -c2- | LC_ALL=C tr -d '\n'
         # line break after each file
@@ -123,25 +123,32 @@ list() {
       # line break after each folder
 			echo
 		else
-      # initialize array for ID3 information
-      ID3=()
+      # initialize arrays for ID3 information
+      ID3artist=()
+      ID3album=()
       # determine ID3 information for all MP3 files in the directory at once and ensure output is ordered accordingly: artist, album
       # ordering: prepend a number per tag, sort nummerically, keep uniqe information only, remove prefixed numbers
-      # store the result in an array
+      # store artist and album results in separate arrays
       while IFS= read -d $'\n' -r LINE; do
-        ID3+=("$LINE")
+        [[ "$LINE" =~ ^Artist: ]] && ID3artist+=("$LINE")
+        [[ "$LINE" =~ ^Album: ]] && ID3album+=("$LINE")
       done < <(id3v2 -l "$DIR"/*.mp3 | LC_ALL=C sed -nE '/^(TPE1|TP1)/s/.*: (.*)/1Artist: \1/p;/^(TALB|TAL)/s/.*: (.*)/2Album: \1/p;/No (ID3|ID3v2) tag/s/.*: (.*)/3\1/p' | \
         LC_ALL=C sort -n | LC_ALL=C uniq | LC_ALL=C cut -c2-)
-      # if array holds exactly 2 elements, it has to be artist and album information
-      # if array holds more than 2 elements, the directory contains songs of various artists and/or albums
-      # otherwise no ID3 tags were found
-      if [ "${#ID3[*]}" -eq 2 ]; then
-				echo "$DIR: ${ID3[0]}, ${ID3[1]}"
-			elif [ "${#ID3[*]}" -gt 2 ]; then
-				echo "$DIR: various artists/albums"
-			else
-				echo "$DIR: no ID3 tags available"
-			fi
+      # print folder summary:
+      # if arrays don't have elements, artist/album information is unknown (due to missing ID3 tags)
+      # if arrays have exactly 1 element, it has to be artist/album the corresponding information
+      # if array holds more than 1 elements, the directory contains songs of various artists/albums
+      echo -n "$DIR: "
+      case "${#ID3artist[*]}" in
+        0) echo -n "Artist: unknown, ";;
+        1) echo -n "${ID3artist[0]}, ";;
+        *) echo -n "Artist: various, ";;
+      esac
+      case "${#ID3album[*]}" in
+        0) echo "Album: unknown";;
+        1) echo "${ID3album[0]}";;
+        *) echo "Album: various";;
+      esac
 		fi
   done
 
